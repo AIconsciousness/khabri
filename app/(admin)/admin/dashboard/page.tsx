@@ -7,8 +7,12 @@ import Link from 'next/link';
 import { Card, CardHeader, CardBody } from '@/frontend/components/ui/Card';
 import { Button } from '@/frontend/components/ui/Button';
 
+export const dynamic = 'force-dynamic';
+
 export default function AdminDashboard() {
-  const { data: session, status } = useSession();
+  const sessionData = useSession();
+  const session = sessionData?.data;
+  const status = sessionData?.status || 'loading';
   const router = useRouter();
   const [stats, setStats] = useState({
     totalArticles: 0,

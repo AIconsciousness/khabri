@@ -7,6 +7,8 @@ import Link from 'next/link';
 import { Card, CardHeader, CardBody } from '@/frontend/components/ui/Card';
 import { Button } from '@/frontend/components/ui/Button';
 
+export const dynamic = 'force-dynamic';
+
 interface Article {
   _id: string;
   title: string;
@@ -20,7 +22,9 @@ interface Article {
 }
 
 export default function ArticlesPage() {
-  const { data: session, status } = useSession();
+  const sessionData = useSession();
+  const session = sessionData?.data;
+  const status = sessionData?.status || 'loading';
   const router = useRouter();
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
