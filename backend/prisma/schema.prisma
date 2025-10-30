@@ -1,0 +1,262 @@
+// schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User Model
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?   // Hashed
+  role          Role      @default(USER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  accounts      Account[]
+  sessions      Session[]
+  articles      Article[] @relation("AuthorArticles")
+  comments      Comment[]
+  bookmarks     Bookmark[]
+  subscription  Subscription?
+  readingHistory ReadingHistory[]
+}
+
+enum Role {
+  USER
+  AUTHOR
+  ADMIN
+}
+
+// NextAuth Models
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// Article Model
+model Article {
+  id          String   @id @default(cuid())
+  title       String
+  slug        String   @unique
+  content     String   @db.Text
+  excerpt     String?  @db.Text
+  featuredImage String?
+  status      ArticleStatus @default(DRAFT)
+  isPremium   Boolean  @default(false)
+  views       Int      @default(0)
+  publishedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // SEO
+  metaDescription String?
+  metaKeywords    String?
+  canonicalUrl    String?
+
+  // Relations
+  authorId    String
+  author      User     @relation("AuthorArticles", fields: [authorId], references: [id])
+  categoryId  String
+  category    Category @relation(fields: [categoryId], references: [id])
+  tags        Tag[]    @relation("ArticleTags")
+  comments    Comment[]
+  bookmarks   Bookmark[]
+  readingHistory ReadingHistory[]
+
+  @@index([slug])
+  @@index([publishedAt])
+  @@index([categoryId])
+}
+
+enum ArticleStatus {
+  DRAFT
+  PUBLISHED
+  SCHEDULED
+  ARCHIVED
+}
+
+// Category Model
+model Category {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  slug        String    @unique
+  description String?
+  icon        String?
+  displayOrder Int      @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // SEO
+  metaTitle       String?
+  metaDescription String?
+
+  articles    Article[]
+}
+
+// Tag Model
+model Tag {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  slug      String    @unique
+  createdAt DateTime  @default(now())
+
+  articles  Article[] @relation("ArticleTags")
+}
+
+// Comment Model
+model Comment {
+  id        String   @id @default(cuid())
+  content   String   @db.Text
+  status    CommentStatus @default(PENDING)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  articleId String
+  article   Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  // Thread support
+  parentId  String?
+  parent    Comment? @relation("CommentThread", fields: [parentId], references: [id])
+  replies   Comment[] @relation("CommentThread")
+
+  @@index([articleId])
+  @@index([userId])
+}
+
+enum CommentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// Bookmark Model
+model Bookmark {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  articleId String
+  article   Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, articleId])
+}
+
+// Reading History Model
+model ReadingHistory {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  articleId String
+  article   Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, articleId])
+  @@index([userId, createdAt])
+}
+
+// Subscription Model
+model Subscription {
+  id              String   @id @default(cuid())
+  status          SubscriptionStatus @default(INACTIVE)
+  plan            SubscriptionPlan
+  startDate       DateTime
+  endDate         DateTime
+  autoRenew       Boolean  @default(true)
+  razorpayOrderId String?
+  razorpayPaymentId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  INACTIVE
+  CANCELLED
+  EXPIRED
+}
+
+enum SubscriptionPlan {
+  MONTHLY
+  YEARLY
+}
+
+// Newsletter Subscription
+model Newsletter {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+// Ad Configuration
+model AdSlot {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  position    String   // header, sidebar, infeed, popup
+  size        String   // 728x90, 300x250, etc.
+  adCode      String   @db.Text
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Analytics
+model Analytics {
+  id          String   @id @default(cuid())
+  date        DateTime @default(now()) @db.Date
+  pageViews   Int      @default(0)
+  uniqueVisitors Int   @default(0)
+  articleId   String?
+
+  @@unique([date, articleId])
+  @@index([date])
+}
